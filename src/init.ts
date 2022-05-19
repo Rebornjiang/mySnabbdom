@@ -166,7 +166,12 @@ export function init(
     }
     // 3. sel 不为 undefined，这要创建真实的 dom 的节点
     else if (sel !== undefined) {
-      // Parse selector
+      // - 1）Parse selector 获取 tag
+      /*
+        'div#app.class1.class2' 前置位 # 能够正确的得到 tag
+        'div.class1.class2#app' 后位置 # 得到的 tag 为 div.class1.class2
+        div || div#app || div.class1能够正确的得到 tag
+      */
       const hashIdx = sel.indexOf("#");
       const dotIdx = sel.indexOf(".", hashIdx);
       const hash = hashIdx > 0 ? hashIdx : sel.length;
@@ -175,14 +180,26 @@ export function init(
         hashIdx !== -1 || dotIdx !== -1
           ? sel.slice(0, Math.min(hash, dot))
           : sel;
+
+      // - 2）创建真实的 dom 元素，data.ns 决定所创建的 dom 是否是带指定命名空间的dom(这个作用好像是用来创建 svg 元素的)
+
       const elm = (vnode.elm =
         isDef(data) && isDef((i = data.ns))
           ? api.createElementNS(i, tag, data)
           : api.createElement(tag, data));
+
+      // - 3）给创建的元素添加上 class id 选择器；对于两者 id ，class 都有的，要把 # 前置
       if (hash < dot) elm.setAttribute("id", sel.slice(hash + 1, dot));
       if (dotIdx > 0)
         elm.setAttribute("class", sel.slice(dot + 1).replace(/\./g, " "));
+
+      // - 4) 当元素创建的时候，需要触发所有模块的钩子函数
+      // 模块的 create 生命周期钩子为什么要传 空节点
       for (i = 0; i < cbs.create.length; ++i) cbs.create[i](emptyNode, vnode);
+
+      // - 5）当前 vnode 对象的 dom 创建完成，需要考虑其内容，看看内容是子节点还是文本节点
+
+      // 如果内容有子节点，继续递归调用 createElm，并把最后创建的元素挂在到当前 vnode 的 真实 dom 上
       if (is.array(children)) {
         for (i = 0; i < children.length; ++i) {
           const ch = children[i];
@@ -190,9 +207,13 @@ export function init(
             api.appendChild(elm, createElm(ch as VNode, insertedVnodeQueue));
           }
         }
-      } else if (is.primitive(vnode.text)) {
+      }
+      // 内容为文本节点，创建文本节点，挂载到当前 vnode对象的 elm 上
+      else if (is.primitive(vnode.text)) {
         api.appendChild(elm, api.createTextNode(vnode.text));
       }
+
+      // 到这里 vnodeData 中的 hook 的create 钩子的里面通过 vnode 对象的 elm 可以拿到他自己真实的 dom 和所有的子节点
       const hook = vnode.data!.hook;
       if (isDef(hook)) {
         hook.create?.(emptyNode, vnode);
@@ -207,10 +228,14 @@ export function init(
       // 如果在调用 init 函数第三个参数有传 options, 并且 experimental.fragments 的值 为 true ，说明开启了碎片节点选项
       // 接下来只要在创建 vnode 的时候，将 sel === undefined ，这时候会创建 framents 碎片节点
       const children = vnode.children;
+
+      // 如果当前浏览器不支持 createDocumentFrament API 就抛出异常，否则创建碎片节点
       vnode.elm = (
         api.createDocumentFragment ?? documentFragmentIsNotSupported
       )();
       for (i = 0; i < cbs.create.length; ++i) cbs.create[i](emptyNode, vnode);
+
+      // 遍历所有的子节点，然后调用 createElm 递归去创建所有子节点，并将其挂载到碎片节点上
       for (i = 0; i < children.length; ++i) {
         const ch = children[i];
         if (ch != null) {
