@@ -141,7 +141,10 @@ export function init(
 
   function createElm(vnode: VNode, insertedVnodeQueue: VNodeQueue): Node {
     let i: any;
+    // 获取 vnodeData
     let data = vnode.data;
+
+    // 1. 看看当前 vnodeData 中是否右 init 钩子，如果有就执行
     if (data !== undefined) {
       const init = data.hook?.init;
       if (isDef(init)) {
@@ -149,14 +152,20 @@ export function init(
         data = vnode.data;
       }
     }
+
     const children = vnode.children;
     const sel = vnode.sel;
+    // 2. sel 如果是 ！为注释节点
     if (sel === "!") {
+      // 如果注释节点Vnode text 没有定义要将其换成 空字符串, 不能够为 undefined ,不然展示就为 undefined
       if (isUndef(vnode.text)) {
         vnode.text = "";
       }
+      // 根据 text 文本创建真实的 注释节点 dom
       vnode.elm = api.createComment(vnode.text!);
-    } else if (sel !== undefined) {
+    }
+    // 3. sel 不为 undefined，这要创建真实的 dom 的节点
+    else if (sel !== undefined) {
       // Parse selector
       const hashIdx = sel.indexOf("#");
       const dotIdx = sel.indexOf(".", hashIdx);
@@ -191,7 +200,12 @@ export function init(
           insertedVnodeQueue.push(vnode);
         }
       }
-    } else if (options?.experimental?.fragments && vnode.children) {
+    }
+    // 4. Fragment 是碎片节点，他不属于 dom 树的一部分， 他的变化不会触发 dom树重新渲染，所以不会导致性能问题。
+    // Fragment 用处：创建一个碎片节点，把所有的真实 dom 子节点  添加到 碎片节点里面，然后在把整个 碎片节点添加到父节点里面，这样只会渲染一次，性能更好。
+    else if (options?.experimental?.fragments && vnode.children) {
+      // 如果在调用 init 函数第三个参数有传 options, 并且 experimental.fragments 的值 为 true ，说明开启了碎片节点选项
+      // 接下来只要在创建 vnode 的时候，将 sel === undefined ，这时候会创建 framents 碎片节点
       const children = vnode.children;
       vnode.elm = (
         api.createDocumentFragment ?? documentFragmentIsNotSupported
@@ -206,9 +220,13 @@ export function init(
           );
         }
       }
-    } else {
+    }
+    // 5. sel 为空，也不是 fragments ，就创建空的文本节点
+    else {
       vnode.elm = api.createTextNode(vnode.text!);
     }
+
+    // 6. 返回当前根据 vnode 对象所创建的真实的 dom
     return vnode.elm;
   }
 
@@ -421,18 +439,26 @@ export function init(
     const insertedVnodeQueue: VNodeQueue = [];
     for (i = 0; i < cbs.pre.length; ++i) cbs.pre[i]();
 
+    // 1. 当前 oldVnode 是否是一个真实的 dom 几点
     if (isElement(api, oldVnode)) {
+      // 如果是真实的 dom 节点，会创建一个空的 vnode 对象，不过对于真实 dom 的子节点并没有创建 vnode 对象，也就是说 当前空的 vnode 只有 sel, elm 属性，其他均为空
       oldVnode = emptyNodeAt(oldVnode);
     } else if (isDocumentFragment(api, oldVnode)) {
       oldVnode = emptyDocumentFragmentAt(oldVnode);
     }
 
+    // 2. 对比新旧 vnode 看看是否是 sameVnode, 两个 vnode sel属性，key 属性是否是相等的
     if (sameVnode(oldVnode, vnode)) {
+      // 2.1 是相等的话，使用 diff算法 对比起差异部分
       patchVnode(oldVnode, vnode, insertedVnodeQueue);
     } else {
+      // 2.2 如果不是相等的，
       elm = oldVnode.elm!;
+
+      // - 获取当前 oldVnode 上的 elm（真实 dom） 的父节点
       parent = api.parentNode(elm) as Node;
 
+      // - 根据 新的 vnode 对象创建创建真实的元素
       createElm(vnode, insertedVnodeQueue);
 
       if (parent !== null) {

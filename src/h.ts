@@ -67,6 +67,7 @@ export function h(sel: any, b?: any, c?: any): VNode {
     }
   }
   if (children !== undefined) {
+    // 如果第三个参数传了数组，数组里面时文本的话，也会改文本创建了一个文本的 vnode 对象
     for (i = 0; i < children.length; ++i) {
       if (is.primitive(children[i]))
         children[i] = vnode(
