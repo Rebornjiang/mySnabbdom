@@ -167,9 +167,14 @@ export function init(
     // 3. sel 不为 undefined，这要创建真实的 dom 的节点
     else if (sel !== undefined) {
       // Parse selector
+      // div#id.class1.class1 || div.class1.class1#id
+
       const hashIdx = sel.indexOf("#");
+
+      // dotIdx 如果为 -1 并且 hashIdx 不为 -1 代表当前 # 在 class 之后
       const dotIdx = sel.indexOf(".", hashIdx);
       const hash = hashIdx > 0 ? hashIdx : sel.length;
+
       const dot = dotIdx > 0 ? dotIdx : sel.length;
       const tag =
         hashIdx !== -1 || dotIdx !== -1
@@ -245,13 +250,14 @@ export function init(
       }
     }
   }
-
+  // 触发 vnode 对象中的 vnodeData.hook 中定义的destory 钩子，然后触发模块的 destory 钩子
   function invokeDestroyHook(vnode: VNode) {
     const data = vnode.data;
     if (data !== undefined) {
       data?.hook?.destroy?.(vnode);
       for (let i = 0; i < cbs.destroy.length; ++i) cbs.destroy[i](vnode);
       if (vnode.children !== undefined) {
+        // vnode 内容如果是子节点 vnode ，递归触发其 destory 钩子
         for (let j = 0; j < vnode.children.length; ++j) {
           const child = vnode.children[j];
           if (child != null && typeof child !== "string") {
@@ -271,11 +277,19 @@ export function init(
     for (; startIdx <= endIdx; ++startIdx) {
       let listeners: number;
       let rm: () => void;
+      // 取到当前 vnode 对象
       const ch = vnodes[startIdx];
       if (ch != null) {
+        // 判断当前是否有定义 sel
         if (isDef(ch.sel)) {
+          // 触发当前要删除的 vnode 和其所有的子节点 vnode 的 并且模块中的 destory 钩子
           invokeDestroyHook(ch);
+
+          // 根据所有第三方模块所拥有 remove 钩子的个数，并且加上 1
           listeners = cbs.remove.length + 1;
+
+          // 如果第三方模块中和当前 vnode 对象中的 vnodeData 有 remove 钩子，将将删除操作移交给第三方模块和定义vnode的用户。
+          // 假如说第三方模块中有三个模块带 remove 钩子，此时listener 就是 4， 也就意味着要调用 4 次 rm 函数才会删除当前 vnode 对象的 elm
           rm = createRmCb(ch.elm!, listeners);
           for (let i = 0; i < cbs.remove.length; ++i) cbs.remove[i](ch, rm);
           const removeHook = ch?.data?.hook?.remove;
@@ -285,6 +299,7 @@ export function init(
             rm();
           }
         } else {
+          // 没有定义 sel 是文本节点
           // Text node
           api.removeChild(parentElm, ch.elm!);
         }
@@ -439,7 +454,7 @@ export function init(
     const insertedVnodeQueue: VNodeQueue = [];
     for (i = 0; i < cbs.pre.length; ++i) cbs.pre[i]();
 
-    // 1. 当前 oldVnode 是否是一个真实的 dom 几点
+    // 1. 当前 oldVnode 是否是一个真实的 dom || 真实的 fragment节点 ，如果是的为其创建空的 空的 vnode 作为 oldVnode
     if (isElement(api, oldVnode)) {
       // 如果是真实的 dom 节点，会创建一个空的 vnode 对象，不过对于真实 dom 的子节点并没有创建 vnode 对象，也就是说 当前空的 vnode 只有 sel, elm 属性，其他均为空
       oldVnode = emptyNodeAt(oldVnode);
@@ -461,16 +476,22 @@ export function init(
       // - 根据 新的 vnode 对象创建创建真实的元素
       createElm(vnode, insertedVnodeQueue);
 
+      // - 当前 oldVnode 上的 elm（真实 dom） 的父节点不为空，在页面上，插入新 vnode 对象上的 真实 dom ，并删除 oldvnode 对象上的vnode
       if (parent !== null) {
         api.insertBefore(parent, vnode.elm!, api.nextSibling(elm));
         removeVnodes(parent, [oldVnode], 0, 0);
       }
     }
 
+    // 此时到这里所有的 节点 都被添加到页面上了，触发各个创建的 vnode 对象上的 vnodeData insert 钩子
     for (i = 0; i < insertedVnodeQueue.length; ++i) {
       insertedVnodeQueue[i].data!.hook!.insert!(insertedVnodeQueue[i]);
     }
+
+    // 触发第三方模块的post钩子
     for (i = 0; i < cbs.post.length; ++i) cbs.post[i]();
+
+    // 返回新的 vnode 最为下次调用 patch 函数的 oldVnode
     return vnode;
   };
 }

@@ -69,6 +69,7 @@ function insertBefore(
   newNode: Node,
   referenceNode: Node | null
 ): void {
+  // insertBefore 方法往根据 父节点里面的子引用节点，往子引用节点前插入元素，如果 referenceNode 为null ，添加父节点内部子节点的最后
   parentNode.insertBefore(newNode, referenceNode);
 }
 
@@ -85,6 +86,7 @@ function parentNode(node: Node): Node | null {
 }
 
 function nextSibling(node: Node): Node | null {
+  // 获取当前节点的兄弟节点
   return node.nextSibling;
 }
 
